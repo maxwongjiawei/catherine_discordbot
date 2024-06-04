@@ -3,16 +3,29 @@ import json
 from utils import utils
 from agents import item_extractor
 
+config = utils.initiate_config()
+# Retrieve config details
+discord_config = config['DISCORD']
+BOT_TOKEN = discord_config['TOKEN']
+openai_config = config['OPENAI']
+
+item_llm = utils.initiate_item_llm(openai_config['ITEM_EXTRACTOR_LLM'])
+
+client = discord.Client(intents=discord.Intents.default())
+
+
 #Define checklist
 class Checklist:
     def __init__(self):
         self.items = []
 
-    async def add_to_checklist(self, message):
-        print('adding'+message.content)
-        items_to_add = item_extractor.extract_items_from_message(message)  # Extract the content of the message
+    def add_to_checklist(self, message):
+        print('adding ' + message.content)
+        items_to_add = item_extractor.extract_items_from_message(item_llm,
+                                                                 message.content)  # Extract the content of the message
         self.items.extend(items_to_add)
-        await message.channel.send(f"Added '{items_to_add}' to the checklist.")
+        reply_message = f"Added '{items_to_add.name}' to the checklist."
+        return reply_message
 
     def save_checklist(self, filename='checklist.json'):
         with open(filename, 'w') as file:
@@ -27,18 +40,12 @@ class Checklist:
             self.items = []
 
     async def show_checklist(self, message):
-        print('showing'+message.content)
+        print('showing' + message.content)
         await message.channel.send(self.items)
 
 
 my_checklist = Checklist()
 
-config = utils.initiate_config()
-# Retrieve config details
-discord_config = config['DISCORD']
-BOT_TOKEN = discord_config['TOKEN']
-
-client = discord.Client(intents=discord.Intents.default())
 
 @client.event
 async def on_message(message):
@@ -51,12 +58,11 @@ async def on_message(message):
         await message.channel.send(response)
 
     if 'add' in message.content:
-        response = await my_checklist.add_to_checklist(message)
+        response = my_checklist.add_to_checklist(message)
         await message.channel.send(response)
 
     if 'show' in message.content:
         response = await my_checklist.show_checklist(message)
-        await message.channel.send(response)
 
 
 @client.event

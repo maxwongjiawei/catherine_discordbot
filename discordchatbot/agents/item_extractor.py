@@ -1,38 +1,61 @@
-import openai
-from langchain_community.chat_models import ChatOpenAI
 import logging
-from utils import utils
-from langchain_core.prompts import PromptTemplate
+import sys
+sys.path.append("..")
 
+from utils import utils
+from langchain_core.pydantic_v1 import BaseModel, Field
+from typing import Optional
+from langchain_core.prompts import ChatPromptTemplate
 
 config = utils.initiate_config()
 # Retrieve config details
 openai_config = config['OPENAI']
-GPT_TOKEN = openai_config['TOKEN']
-PROMPT = openai_config['PROMPT']
 
 
-def initiate_llm(model_name):
-    llm = ChatOpenAI(
-        model_name=model_name,  # 'gpt-3.5-turbo' or 'gpt-4'
-        temperature=0,
-        openai_api_key=GPT_TOKEN,
-        max_tokens=50)
+class Grocery(BaseModel):
+    """Information about a grocery item."""
 
-    return llm
+    # ^ Doc-string for the entity Person.
+    # This doc-string is sent to the LLM as the description of the schema Person,
+    # and it can help to improve extraction results.
 
-def initiate_prompt(PROMPT):
-    PROMPT_SUMMARY = PromptTemplate(template=PROMPT, input_variables=['context', 'question'])
-    return PROMPT_SUMMARY
+    # Note that:
+    # 1. Each field is an `optional` -- this allows the model to decline to extract it!
+    # 2. Each field has a `description` -- this description is used by the LLM.
+    # Having a good description can help improve extraction results.
+    name: str = Field(default=None, description="The name of the item")
+    brand: Optional[str] = Field(
+        default=None, description="The brand of the item"
+    )
+    comments: Optional[str] = Field(
+        default=None, description="Additional comments about the item"
+    )
 
-def extract_items_from_message(message):
-    logging.info('initiating llm')
-    llm = initiate_llm('gpt-3.5-turbo')
 
-    logging.info('initiating prompt')
-    PROMPT_SUMMARY = initiate_prompt(PROMPT)
+def initiate_item_prompt():
+    item_extractor_prompt2 = openai_config['ITEM_EXTRACTOR_PROMPT2']
+    prompt = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "You are an expert extraction algorithm. "
+            "You are provided a text message containing grocery items."
+            "Only extract relevant information about grocery items from the text. "
+            "If you do not know the value of an attribute asked to extract, "
+            "return null for the attribute's value.",
+        ),
+        # Please see the how-to about improving performance with
+        # reference examples.
+        # MessagesPlaceholder('examples'),
+        ("user", "{text}"),  # Escape curly braces by doubling them
+    ]
+    )
 
-    response = llm.send_message(PROMPT)
-    items = response['choices'][0]['text'].strip().split("\n")
-    return items
+    return prompt
 
+
+def extract_items_from_message(llm, text):
+    prompt = initiate_item_prompt()
+    runnable = prompt | llm.with_structured_output(schema=Grocery)
+    item = runnable.invoke({"text": text})
+    print(item.name)
+    return item

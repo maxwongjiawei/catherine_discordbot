@@ -7,9 +7,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-langchain = "^0.1.19"
 discord = "^2.3.2"
 openai = "^1.28.0"
+langchain-mistralai = "^0.1.7"
+langchain-openai = "^0.1.8"
 
 
 [build-system]
